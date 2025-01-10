@@ -21,7 +21,7 @@ const availableFunctions = {
   },
 };
 
-async function executeStep(step, context) {
+async function executeStep(step, context, renderCallback) {
   const systemMessage = {
     role: "system",
     content: `You are an execution agent that can use tools to help complete tasks. You have access to the following tools:
@@ -67,7 +67,7 @@ When you need to search for information, use the search function rather than mak
     content = finalResp.choices[0].message.content || "";
   }
 
-  console.log("🤖 Step result:", content.trim());
+  renderCallback?.renderLog(`🤖 Step result: ${content.trim()}`);
   return content.trim();
 }
 

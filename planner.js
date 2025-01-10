@@ -35,7 +35,6 @@ async function planStep(objective, context) {
 ${generateToolsDescription()}`,
   };
   const userMessage = { role: "user", content: objective };
-
   const resp = await callOpenAIChat([systemMessage, userMessage], context);
   const msg = resp.choices[0].message.content;
 
@@ -88,16 +87,14 @@ ${generateToolsDescription()}`,
 Last Executed Step: ${lastStep ? `${lastStep[0]}: ${lastStep[1]}` : "None"}
 
 Remaining Steps:
-${
-  remainingSteps.length > 0 ? remainingSteps.join("\n") : "(No remaining steps)"
-}
+${remainingSteps.length > 0 ? remainingSteps.join("\n") : "(No remaining steps)"
+      }
 
 Current Progress:
-${
-  state.pastSteps.length > 0
-    ? state.pastSteps.map((p) => p[0] + ": " + p[1]).join("\n")
-    : "(No steps executed yet)"
-}`,
+${state.pastSteps.length > 0
+        ? state.pastSteps.map((p) => p[0] + ": " + p[1]).join("\n")
+        : "(No steps executed yet)"
+      }`,
   };
 
   const resp = await callOpenAIChat([systemMessage, userMessage], context);

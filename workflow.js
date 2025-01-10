@@ -20,64 +20,64 @@ function createContext() {
   };
 }
 
-async function runWorkflow(state) {
+async function runWorkflow(state, renderCallback) {
   const context = createContext();
 
   // Plan
-  console.log("📋 Planning initial steps...");
-  state.plan = await planStep(state.input, context);
+  renderCallback?.renderLog("📋 Planning initial steps...");
+  state.plan = await planStep(state.input, context, renderCallback);
   state.currentStep = 0;
 
-  while (!state.response) {
-    console.log("\n==============");
+  renderCallback?.renderPlanSteps("Initial Plan:", state.plan);
 
+  while (!state.response) {
     // Check if we've completed all steps
     if (state.currentStep >= state.plan.length) {
-      // If no steps left, check if we're done
-      const replanOut = await replanStep(state, context);
+      const replanOut = await replanStep(state, context, renderCallback);
       if (replanOut.response) {
         state.response = replanOut.response;
         break;
       }
       if (replanOut.plan) {
-        console.log("📝 Replanning with new steps...");
+        renderCallback?.renderLog("📝 Replanning with new steps...");
         state.plan = replanOut.plan;
+        renderCallback?.renderPlanSteps("Updated Plan:", replanOut.plan);
       }
       continue;
     }
 
     // Execute current step
     const currentStep = state.plan[state.currentStep];
-    console.log(
-      `🔨 Executing step ${state.currentStep + 1}/${
-        state.plan.length
-      }: ${currentStep}`
+    renderCallback?.renderCurrentStepTitle(
+      `[Executing Step ${state.currentStep + 1}/${state.plan.length}]: `,
+      currentStep
     );
-    const result = await executeStep(currentStep, context);
+
+    const result = await executeStep(currentStep, context, renderCallback);
+
     state.pastSteps.push([currentStep, result]);
     state.currentStep++;
 
     // Replan after each step
-    console.log("🤔 Evaluating next steps...");
-    const replanOut = await replanStep(state, context);
+    renderCallback?.renderLog("🤔 Evaluating next steps...");
+    const replanOut = await replanStep(state, context, renderCallback);
     if (replanOut.response) {
-      console.log("✅ Workflow complete! Generating final response...");
+      renderCallback?.renderLog("✅ Workflow complete! Generating final response...");
       state.response = replanOut.response;
       break;
     }
 
-    // Update the plan with the new steps
     if (replanOut.plan) {
-      console.log("📝 Updating plan with new steps...");
+      renderCallback?.renderLog("📝 Updating plan with new steps...");
       state.plan = [
         ...state.plan.slice(0, state.currentStep),
         ...replanOut.plan,
       ];
+      renderCallback?.renderPlanSteps("Updated Plan:", state.plan.slice(state.currentStep));
     }
   }
 
-  console.log("\n==============");
-  console.log("👋 Shutting down workflow...");
+  renderCallback?.renderLog("👋 Shutting down workflow...");
   await langfuse.shutdownAsync();
   return state.response;
 }
