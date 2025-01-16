@@ -1,136 +1,106 @@
-const { uuid } = require('uuidv4');
+const { OAuth2Client } = require('google-auth-library');
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 class WebSocketHandler {
-    constructor(onSearch) {
+    constructor(searchCallback) {
         this.clients = new Map();
-        this.onSearch = onSearch;
+        this.searchCallback = searchCallback;
+    }
+
+    async verifyGoogleToken(token) {
+        try {
+            const ticket = await client.verifyIdToken({
+                idToken: token,
+                audience: process.env.GOOGLE_CLIENT_ID
+            });
+            return ticket.getPayload();
+        } catch (error) {
+            console.error('Token verification failed:', error);
+            return null;
+        }
     }
 
     handleConnection(ws) {
-        const clientId = uuid();
-        this.clients.set(clientId, ws);
+        const clientId = Math.random().toString(36).substring(7);
+        let isAuthenticated = false;
 
-        console.log(`New WebSocket connection established with ID: ${clientId}`);
-
-        this.sendWelcomeMessage(ws, clientId);
-        this.setupMessageHandler(ws, clientId);
-        this.setupDisconnectionHandler(ws, clientId);
-        this.setupErrorHandler(ws, clientId);
-    }
-
-    sendWelcomeMessage(ws, clientId) {
-        this.sendMessage(ws, {
-            type: 'connection',
-            clientId: clientId,
-            message: 'Welcome to the WebSocket server!'
-        });
-    }
-
-    sendMessage(ws, data) {
-        if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify(data));
-        }
-    }
-
-    setupMessageHandler(ws, clientId) {
-        ws.on('message', (message) => {
+        ws.on('message', async (message) => {
             try {
-                const parsedMessage = JSON.parse(message);
-                console.log(`Received from ${clientId}:`, parsedMessage);
+                const data = JSON.parse(message);
 
-                // Handle searchText message
-                if (parsedMessage.searchText !== undefined) {
-                    // Call the search callback if provided
-                    if (this.onSearch) {
-                        this.onSearch(parsedMessage.searchText, clientId);
+                if (data.type === 'auth') {
+                    const payload = await this.verifyGoogleToken(data.token);
+                    if (!payload) {
+                        console.log('Authentication failed for client:', clientId);
+                        ws.close();
+                        return;
                     }
-
-                    this.sendMessage(ws, {
-                        type: 'search_ack',
-                        message: 'Ack',
-                        searchText: parsedMessage.searchText,
-                        clientId: clientId
-                    });
+                    isAuthenticated = true;
+                    this.clients.set(clientId, { ws, userId: payload.sub });
+                    console.log('Client authenticated:', clientId, payload.email);
                     return;
                 }
 
-                // Handle other messages
-                this.sendMessage(ws, {
-                    type: 'response',
-                    message: `Server received: ${message}`,
-                    clientId: clientId
-                });
+                if (!isAuthenticated) {
+                    console.log('Unauthenticated request from client:', clientId);
+                    ws.close();
+                    return;
+                }
+
+                if (data.searchText) {
+                    this.searchCallback(data.searchText, clientId);
+                }
             } catch (error) {
-                console.error('Error parsing message:', error);
-                this.sendMessage(ws, {
-                    type: 'error',
-                    message: 'Invalid message format',
-                    clientId: clientId
-                });
+                console.error('Error processing message:', error);
             }
         });
-    }
 
-    setupDisconnectionHandler(ws, clientId) {
         ws.on('close', () => {
-            console.log(`Client ${clientId} disconnected`);
             this.clients.delete(clientId);
-        });
-    }
-
-    setupErrorHandler(ws, clientId) {
-        ws.on('error', (error) => {
-            console.error(`Error with client ${clientId}:`, error);
-            this.clients.delete(clientId);
-        });
-    }
-
-    sendToClient(clientId, data) {
-        const ws = this.clients.get(clientId);
-        if (ws) {
-            this.sendMessage(ws, data);
-        }
-    }
-
-    broadcast(data) {
-        this.clients.forEach((ws) => {
-            this.sendMessage(ws, data);
         });
     }
 
     renderPlanSteps(clientId, title, steps) {
-        const planStepsMessage = {
-            key: 'renderListSteps',
-            title: title,
-            steps: steps
-        };
+        const client = this.clients.get(clientId);
+        if (!client) return;
 
-        this.sendToClient(clientId, planStepsMessage);
+        client.ws.send(JSON.stringify({
+            key: 'renderListSteps',
+            title,
+            steps,
+        }));
     }
 
     renderCurrentStepTitle(clientId, header, value) {
-        const planStepsMessage = {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+
+        client.ws.send(JSON.stringify({
             key: 'renderCurrentStepTitle',
-            header: header,
-            value: value
-        };
-        this.sendToClient(clientId, planStepsMessage);
+            header,
+            value,
+        }));
     }
 
     renderStepResult(clientId, step, resultTitle) {
-        const planStepsMessage = {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+
+        client.ws.send(JSON.stringify({
             key: 'renderStepResult',
-            step: step,
-            resultTitle: resultTitle,
-        };
-        this.sendToClient(clientId, planStepsMessage);
+            step,
+            resultTitle,
+        }));
     }
 
     renderLog(clientId, log) {
-        const planStepsMessage = {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+
+        client.ws.send(JSON.stringify({
             key: 'renderLog',
-            log: log
-        };
-        this.sendToClient(clientId, planStepsMessage);
+            log,
+        }));
     }
 }
 
