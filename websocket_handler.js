@@ -28,6 +28,8 @@ class WebSocketHandler {
         let isAuthenticated = false;
         let userId = null;
 
+        console.log('New client connected:', clientId);
+
         ws.on('message', async (message) => {
             try {
                 const data = JSON.parse(message);
@@ -52,6 +54,12 @@ class WebSocketHandler {
 
                     this.clients.set(clientId, { ws, userId });
                     console.log('Client authenticated and stored:', clientId, payload.email);
+
+                    // Send acknowledgment back to client
+                    ws.send(JSON.stringify({
+                        key: 'auth_success',
+                        message: 'Authentication successful'
+                    }));
                     return;
                 }
 
@@ -66,10 +74,20 @@ class WebSocketHandler {
                 }
             } catch (error) {
                 console.error('Error processing message:', error);
+                ws.send(JSON.stringify({
+                    key: 'error',
+                    message: 'Error processing request'
+                }));
             }
         });
 
         ws.on('close', () => {
+            console.log('Client disconnected:', clientId);
+            this.clients.delete(clientId);
+        });
+
+        ws.on('error', (error) => {
+            console.error('WebSocket error for client:', clientId, error);
             this.clients.delete(clientId);
         });
     }
