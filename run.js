@@ -1,72 +1,64 @@
 // run.js
-const express = require('express');
-const { WebSocketServer } = require('ws');
-const http = require('http');
+const WebSocket = require('ws');
+const { ensureDbExists } = require('./utils/db');
 const WebSocketHandler = require('./websocket_handler');
+const { runAgent } = require('./app');
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
-
-const port = process.env.PORT || 3001;
-const { runAgent } = require("./app");
-
-// Search handler function
-async function handleSearch(searchText, clientId, wsHandler) {
-  console.log(`Processing search request: "${searchText}" from client: ${clientId}`);
-
-  // Create the renderCallback object
-  const renderCallback = {
-    renderPlanSteps: (title, steps) => {
-      wsHandler.renderPlanSteps(clientId, title, steps);
-    },
-    renderCurrentStepTitle: (header, value) => {
-      wsHandler.renderCurrentStepTitle(clientId, header, value);
-    },
-    renderStepResult: (step, result) => {
-      wsHandler.renderStepResult(clientId, step, result);
-    },
-    renderLog: (log) => {
-      wsHandler.renderLog(clientId, log);
-    }
-  };
-
+async function main() {
   try {
-    const response = await runAgent(searchText, renderCallback);
-    wsHandler.renderLog(clientId, `Final Answer: ${response}`);
+    // Initialize database first
+    console.log('Initializing database...');
+    await ensureDbExists();
+    console.log('Database initialized successfully');
+
+    // Start WebSocket server
+    const wss = new WebSocket.Server({ port: 3001 });
+    console.log('WebSocket server is running on port 3001');
+
+    const wsHandler = new WebSocketHandler((searchText, clientId, userId) => {
+      const renderCallback = {
+        renderPlanSteps: (title, steps) => {
+          wsHandler.renderPlanSteps(clientId, title, steps);
+        },
+        renderCurrentStepTitle: (header, value) => {
+          wsHandler.renderCurrentStepTitle(clientId, header, value);
+        },
+        renderStepResult: (step, resultTitle) => {
+          wsHandler.renderStepResult(clientId, step, resultTitle);
+        },
+        renderLog: (log) => {
+          wsHandler.renderLog(clientId, log);
+        },
+      };
+
+      runAgent(searchText, renderCallback, userId).catch(error => {
+        console.error('Error in runAgent:', error);
+        wsHandler.renderLog(clientId, "❌ An error occurred while processing your request.");
+      });
+    });
+
+    wss.on('connection', (ws) => {
+      wsHandler.handleConnection(ws);
+    });
+
   } catch (error) {
-    console.error("Error:", error);
-    wsHandler.renderLog(clientId, `Error: ${error.message}`);
+    console.error('Failed to start server:', error);
+    process.exit(1);
   }
 }
 
-// Create WebSocket handler instance with search callback
-const wsHandler = new WebSocketHandler((searchText, clientId) => {
-  handleSearch(searchText, clientId, wsHandler);
+// Handle errors and cleanup
+process.on('SIGINT', () => {
+  console.log('Shutting down server...');
+  process.exit(0);
 });
 
-// Middleware for parsing JSON bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve static files from public directory
-app.use(express.static('public'));
-
-// Basic route
-app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to the Express API!' });
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
 });
 
-// WebSocket connection handler
-wss.on('connection', (ws) => {
-  wsHandler.handleConnection(ws);
-});
-
-// Start server
-server.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-  console.log(`WebSocket server is ready`);
-});
+main();
 
 
 

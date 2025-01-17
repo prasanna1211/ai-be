@@ -1,4 +1,5 @@
 const { OAuth2Client } = require('google-auth-library');
+const { updateUser } = require('./utils/db');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 class WebSocketHandler {
@@ -13,9 +14,11 @@ class WebSocketHandler {
                 idToken: token,
                 audience: process.env.GOOGLE_CLIENT_ID
             });
-            return ticket.getPayload();
+            const payload = ticket.getPayload();
+            console.log('Token verified successfully:', payload.email);
+            return payload;
         } catch (error) {
-            console.error('Token verification failed:', error);
+            console.error('Token verification failed:', error.message);
             return null;
         }
     }
@@ -23,6 +26,7 @@ class WebSocketHandler {
     handleConnection(ws) {
         const clientId = Math.random().toString(36).substring(7);
         let isAuthenticated = false;
+        let userId = null;
 
         ws.on('message', async (message) => {
             try {
@@ -36,19 +40,29 @@ class WebSocketHandler {
                         return;
                     }
                     isAuthenticated = true;
-                    this.clients.set(clientId, { ws, userId: payload.sub });
-                    console.log('Client authenticated:', clientId, payload.email);
+                    userId = payload.sub;
+
+                    // Store or update user data
+                    await updateUser(userId, {
+                        email: payload.email,
+                        name: payload.name,
+                        picture: payload.picture,
+                        lastLogin: new Date().toISOString()
+                    });
+
+                    this.clients.set(clientId, { ws, userId });
+                    console.log('Client authenticated and stored:', clientId, payload.email);
                     return;
                 }
 
-                if (!isAuthenticated) {
+                if (!isAuthenticated || !userId) {
                     console.log('Unauthenticated request from client:', clientId);
                     ws.close();
                     return;
                 }
 
                 if (data.searchText) {
-                    this.searchCallback(data.searchText, clientId);
+                    this.searchCallback(data.searchText, clientId, userId);
                 }
             } catch (error) {
                 console.error('Error processing message:', error);
