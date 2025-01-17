@@ -2,12 +2,15 @@
 
 require("dotenv").config();
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const { updateUserCount } = require('./utils/db');
 
 let trace;
 
-async function callOpenAIChat(messages, options = {}) {
+async function callOpenAIChat(messages, options = {}, userId = null) {
   // messages: [{role: 'system'|'user'|'assistant'|'function', content: '...'}]
   // options: { functions, function_call } for function calling
+
+  console.log('Calling OpenAI with userId:', userId);
 
   const payload = {
     model: "gpt-4-0613",
@@ -57,7 +60,16 @@ async function callOpenAIChat(messages, options = {}) {
         output: data,
       });
     }
-    return data;
+
+    // Update user's token count if userId is provided
+    if (userId && data.usage?.total_tokens) {
+      await updateUserCount(userId, data.usage.total_tokens);
+    }
+
+    return {
+      ...data,
+      tokenCount: data.usage?.total_tokens || 0
+    };
   } catch (error) {
     console.error("Error calling OpenAI:", error);
     throw error;

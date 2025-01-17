@@ -89,8 +89,43 @@ async function getUser(userId) {
     }
 }
 
+async function updateUserCount(userId, newTokens) {
+    try {
+        console.log(`Updating token count for user ${userId}: +${newTokens}`);
+        const db = await readDb();
+        const user = db.users[userId];
+
+        if (!user) {
+            console.error(`User ${userId} not found when updating token count`);
+            return;
+        }
+
+        // Just update the count
+        user.count = (user.count || 0) + newTokens;
+        user.updatedAt = new Date().toISOString();
+
+        await writeDb(db);
+
+        // Find all WebSocket clients for this user and update them
+        const wsHandler = require('../websocket_handler');
+        // const clients = Array.from(wsHandler.clients.entries())
+        //     .filter(([_, client]) => client.userId === userId);
+
+        // for (const [clientId] of clients) {
+        //     wsHandler.updateTokenCount(clientId, user.count);
+        // }
+
+        console.log(`Token count updated for user ${userId}. New total: ${user.count}`);
+        return user.count;
+    } catch (error) {
+        console.error('Error updating user token count:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     ensureDbExists,
     updateUser,
-    getUser
+    getUser,
+    updateUserCount
 };

@@ -27,7 +27,7 @@ function generateToolsDescription() {
   return toolsDesc;
 }
 
-async function planStep(objective, context) {
+async function planStep(objective, context, renderCallback, userId) {
   const systemMessage = {
     role: "system",
     content: `You are a planner. Given an objective, return a step by step plan as a JSON object { "steps": [ "step 1", "step 2" ] } with no extra commentary.
@@ -35,7 +35,7 @@ async function planStep(objective, context) {
 ${generateToolsDescription()}`,
   };
   const userMessage = { role: "user", content: objective };
-  const resp = await callOpenAIChat([systemMessage, userMessage], context);
+  const resp = await callOpenAIChat([systemMessage, userMessage], context, userId);
   const msg = resp.choices[0].message.content;
 
   // Attempt to parse JSON
@@ -54,10 +54,10 @@ ${generateToolsDescription()}`,
     });
   }
 
-  return plan.steps || [];
+  return { plan: plan.steps || [] };
 }
 
-async function replanStep(state, context) {
+async function replanStep(state, context, renderCallback, userId) {
   const systemMessage = {
     role: "system",
     content: `You are a planner. Given the original objective, the current plan, and the last executed step, determine if the plan needs to be modified.
@@ -76,8 +76,6 @@ ${generateToolsDescription()}`,
 
   // Get the last executed step and remaining steps
   const lastStep = state.pastSteps[state.pastSteps.length - 1];
-  // Since currentStep points to the next step to be executed,
-  // we want all steps starting from currentStep
   const remainingSteps = state.plan.slice(state.currentStep);
 
   const userMessage = {
@@ -87,8 +85,7 @@ ${generateToolsDescription()}`,
 Last Executed Step: ${lastStep ? `${lastStep[0]}: ${lastStep[1]}` : "None"}
 
 Remaining Steps:
-${remainingSteps.length > 0 ? remainingSteps.join("\n") : "(No remaining steps)"
-      }
+${remainingSteps.length > 0 ? remainingSteps.join("\n") : "(No remaining steps)"}
 
 Current Progress:
 ${state.pastSteps.length > 0
@@ -97,7 +94,7 @@ ${state.pastSteps.length > 0
       }`,
   };
 
-  const resp = await callOpenAIChat([systemMessage, userMessage], context);
+  const resp = await callOpenAIChat([systemMessage, userMessage], context, userId);
   const msg = resp.choices[0].message.content;
 
   let output;

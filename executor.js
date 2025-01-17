@@ -21,7 +21,7 @@ const availableFunctions = {
   },
 };
 
-async function executeStep(step, context, renderCallback) {
+async function executeStep(step, context, renderCallback, userId) {
   const systemMessage = {
     role: "system",
     content: `You are an execution agent that can use tools to help complete tasks. You have access to the following tools:
@@ -33,10 +33,14 @@ When you need to search for information, use the search function rather than mak
   const userMessage = { role: "user", content: step };
 
   // Call LLM with function calling enabled
-  const initialResp = await callOpenAIChat([systemMessage, userMessage], {
-    functions: [availableFunctions.search],
-    function_call: "auto",
-  });
+  const initialResp = await callOpenAIChat(
+    [systemMessage, userMessage],
+    {
+      functions: [availableFunctions.search],
+      function_call: "auto",
+    },
+    userId
+  );
 
   let content = initialResp.choices[0].message.content;
   const functionCall = initialResp.choices[0].message.function_call;
@@ -49,7 +53,7 @@ When you need to search for information, use the search function rather than mak
     // Give results back to the model for final response
     const toolMessage = {
       role: "assistant",
-      content: null,
+      content: "Searching for information...",
       function_call: functionCall,
     };
 
@@ -61,7 +65,8 @@ When you need to search for information, use the search function rather than mak
 
     const finalResp = await callOpenAIChat(
       [systemMessage, userMessage, toolMessage, toolResultMessage],
-      context
+      context,
+      userId
     );
 
     content = finalResp.choices[0].message.content || "";

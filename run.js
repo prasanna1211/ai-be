@@ -31,6 +31,7 @@ async function main() {
         },
       };
 
+      // Pass userId to runAgent
       runAgent(searchText, renderCallback, userId).catch(error => {
         console.error('Error in runAgent:', error);
         wsHandler.renderLog(clientId, "❌ An error occurred while processing your request.");

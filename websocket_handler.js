@@ -45,7 +45,7 @@ class WebSocketHandler {
                     userId = payload.sub;
 
                     // Store or update user data
-                    await updateUser(userId, {
+                    const userData = await updateUser(userId, {
                         email: payload.email,
                         name: payload.name,
                         picture: payload.picture,
@@ -55,10 +55,16 @@ class WebSocketHandler {
                     this.clients.set(clientId, { ws, userId });
                     console.log('Client authenticated and stored:', clientId, payload.email);
 
-                    // Send acknowledgment back to client
+                    // Send user data back to client
                     ws.send(JSON.stringify({
                         key: 'auth_success',
-                        message: 'Authentication successful'
+                        message: 'Authentication successful',
+                        user: {
+                            email: userData.email,
+                            name: userData.name,
+                            picture: userData.picture,
+                            count: userData.count || 0
+                        }
                     }));
                     return;
                 }
@@ -132,6 +138,16 @@ class WebSocketHandler {
         client.ws.send(JSON.stringify({
             key: 'renderLog',
             log,
+        }));
+    }
+
+    async updateTokenCount(clientId, newCount) {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+
+        client.ws.send(JSON.stringify({
+            key: 'token_update',
+            count: newCount
         }));
     }
 }

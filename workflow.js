@@ -20,66 +20,73 @@ function createContext() {
   };
 }
 
-async function runWorkflow(state, renderCallback) {
+async function runWorkflow(state, renderCallback, userId) {
   const context = createContext();
 
-  // Plan
-  renderCallback?.renderLog("📋 Planning initial steps...");
-  state.plan = await planStep(state.input, context, renderCallback);
-  state.currentStep = 0;
+  try {
+    // Plan
+    renderCallback?.renderLog("📋 Planning initial steps...");
+    const planResult = await planStep(state.input, context, renderCallback, userId);
+    state.plan = planResult.plan;
+    state.currentStep = 0;
 
-  renderCallback?.renderPlanSteps("Initial Plan:", state.plan);
+    renderCallback?.renderPlanSteps("Initial Plan:", state.plan);
 
-  while (!state.response) {
-    // Check if we've completed all steps
-    if (state.currentStep >= state.plan.length) {
-      const replanOut = await replanStep(state, context, renderCallback);
+    while (!state.response) {
+      // Check if we've completed all steps
+      if (state.currentStep >= state.plan.length) {
+        const replanOut = await replanStep(state, context, renderCallback, userId);
+        if (replanOut.response) {
+          state.response = replanOut.response;
+          break;
+        }
+        if (replanOut.plan) {
+          renderCallback?.renderLog("📝 Replanning with new steps...");
+          state.plan = replanOut.plan;
+          renderCallback?.renderPlanSteps("Updated Plan:", replanOut.plan);
+        }
+        continue;
+      }
+
+      // Execute current step
+      const currentStep = state.plan[state.currentStep];
+      renderCallback?.renderCurrentStepTitle(
+        `[Executing Step ${state.currentStep + 1}/${state.plan.length}]: `,
+        currentStep
+      );
+
+      const result = await executeStep(currentStep, context, renderCallback, userId);
+
+      state.pastSteps.push([currentStep, result]);
+      state.currentStep++;
+
+      // Replan after each step
+      renderCallback?.renderLog("🤔 Evaluating next steps...");
+      const replanOut = await replanStep(state, context, renderCallback, userId);
       if (replanOut.response) {
+        renderCallback?.renderLog("✅ Workflow complete! Generating final response...");
         state.response = replanOut.response;
         break;
       }
+
       if (replanOut.plan) {
-        renderCallback?.renderLog("📝 Replanning with new steps...");
-        state.plan = replanOut.plan;
-        renderCallback?.renderPlanSteps("Updated Plan:", replanOut.plan);
+        renderCallback?.renderLog("📝 Updating plan with new steps...");
+        state.plan = [
+          ...state.plan.slice(0, state.currentStep),
+          ...replanOut.plan,
+        ];
+        renderCallback?.renderPlanSteps("Updated Plan:", state.plan.slice(state.currentStep));
       }
-      continue;
     }
 
-    // Execute current step
-    const currentStep = state.plan[state.currentStep];
-    renderCallback?.renderCurrentStepTitle(
-      `[Executing Step ${state.currentStep + 1}/${state.plan.length}]: `,
-      currentStep
-    );
-
-    const result = await executeStep(currentStep, context, renderCallback);
-
-    state.pastSteps.push([currentStep, result]);
-    state.currentStep++;
-
-    // Replan after each step
-    renderCallback?.renderLog("🤔 Evaluating next steps...");
-    const replanOut = await replanStep(state, context, renderCallback);
-    if (replanOut.response) {
-      renderCallback?.renderLog("✅ Workflow complete! Generating final response...");
-      state.response = replanOut.response;
-      break;
-    }
-
-    if (replanOut.plan) {
-      renderCallback?.renderLog("📝 Updating plan with new steps...");
-      state.plan = [
-        ...state.plan.slice(0, state.currentStep),
-        ...replanOut.plan,
-      ];
-      renderCallback?.renderPlanSteps("Updated Plan:", state.plan.slice(state.currentStep));
-    }
+    renderCallback?.renderLog("👋 Shutting down workflow...");
+    await langfuse.shutdownAsync();
+    return state.response;
+  } catch (error) {
+    console.error("Error in workflow:", error);
+    await langfuse.shutdownAsync();
+    throw error;
   }
-
-  renderCallback?.renderLog("👋 Shutting down workflow...");
-  await langfuse.shutdownAsync();
-  return state.response;
 }
 
 module.exports = { runWorkflow };
