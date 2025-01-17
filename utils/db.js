@@ -106,14 +106,18 @@ async function updateUserCount(userId, newTokens) {
 
         await writeDb(db);
 
-        // Find all WebSocket clients for this user and update them
-        const wsHandler = require('../websocket_handler');
-        // const clients = Array.from(wsHandler.clients.entries())
-        //     .filter(([_, client]) => client.userId === userId);
+        // Get WebSocketHandler instance and update clients
+        const WebSocketHandler = require('../websocket_handler');
+        const handler = WebSocketHandler.getInstance();
 
-        // for (const [clientId] of clients) {
-        //     wsHandler.updateTokenCount(clientId, user.count);
-        // }
+        if (handler) {
+            const clients = Array.from(handler.clients.entries())
+                .filter(([_, client]) => client.userId === userId);
+
+            for (const [clientId] of clients) {
+                handler.updateTokenCount(clientId, user.count);
+            }
+        }
 
         console.log(`Token count updated for user ${userId}. New total: ${user.count}`);
         return user.count;

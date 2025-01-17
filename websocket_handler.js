@@ -6,6 +6,8 @@ class WebSocketHandler {
     constructor(searchCallback) {
         this.clients = new Map();
         this.searchCallback = searchCallback;
+        // Make instance available globally
+        WebSocketHandler.instance = this;
     }
 
     async verifyGoogleToken(token) {
@@ -149,6 +151,10 @@ class WebSocketHandler {
             key: 'token_update',
             count: newCount
         }));
+    }
+
+    static getInstance() {
+        return WebSocketHandler.instance;
     }
 }
 
