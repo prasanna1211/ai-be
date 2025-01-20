@@ -61,14 +61,32 @@ async function callOpenAIChat(messages, options = {}, userId = null) {
       });
     }
 
+    // Calculate cost based on input and output tokens
+    const inputTokens = data.usage?.prompt_tokens || 0;
+    const outputTokens = data.usage?.completion_tokens || 0;
+    const totalTokens = data.usage?.total_tokens || 0;
+
+    // Cost calculation (in USD)
+    // Input: $0.03 per 1K tokens
+    // Output: $0.06 per 1K tokens
+    const cost = (
+      (inputTokens * 0.03) / 1000 +
+      (outputTokens * 0.06) / 1000
+    ).toFixed(6);
+
     // Update user's token count if userId is provided
-    if (userId && data.usage?.total_tokens) {
-      await updateUserCount(userId, data.usage.total_tokens);
+    if (userId && totalTokens) {
+      await updateUserCount(userId, totalTokens);
     }
 
     return {
       ...data,
-      tokenCount: data.usage?.total_tokens || 0
+      tokenCount: totalTokens,
+      cost: parseFloat(cost),
+      usage: {
+        ...data.usage,
+        cost: parseFloat(cost)
+      }
     };
   } catch (error) {
     console.error("Error calling OpenAI:", error);
