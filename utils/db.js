@@ -133,6 +133,13 @@ async function resetAllUserCounts() {
         const db = await readDb();
 
         let resetCount = 0;
+        for (const userId in db.users) {
+            if (db.users[userId].count) {
+                db.users[userId].count = 0;
+                db.users[userId].updatedAt = new Date().toISOString();
+                resetCount++;
+            }
+        }
 
         await writeDb(db);
         console.log(`Reset token counts for ${resetCount} users`);
