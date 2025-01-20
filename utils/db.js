@@ -127,9 +127,33 @@ async function updateUserCount(userId, newTokens) {
     }
 }
 
+async function resetAllUserCounts() {
+    try {
+        console.log('Resetting all user token counts');
+        const db = await readDb();
+
+        let resetCount = 0;
+        for (const userId in db.users) {
+            if (db.users[userId].count) {
+                db.users[userId].count = 0;
+                db.users[userId].updatedAt = new Date().toISOString();
+                resetCount++;
+            }
+        }
+
+        await writeDb(db);
+        console.log(`Reset token counts for ${resetCount} users`);
+        return resetCount;
+    } catch (error) {
+        console.error('Error resetting user counts:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     ensureDbExists,
     updateUser,
     getUser,
-    updateUserCount
+    updateUserCount,
+    resetAllUserCounts
 };
