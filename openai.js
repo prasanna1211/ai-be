@@ -76,7 +76,7 @@ async function callOpenAIChat(messages, options = {}, userId = null) {
 
     // Update user's token count if userId is provided
     if (userId && totalTokens) {
-      await updateUserCount(userId, totalTokens);
+      await updateUserCount(userId, parseFloat(cost));
     }
 
     return {

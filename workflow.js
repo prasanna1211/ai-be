@@ -65,6 +65,7 @@ async function runWorkflow(state, renderCallback, userId) {
       const replanOut = await replanStep(state, context, renderCallback, userId);
       if (replanOut.response) {
         renderCallback?.renderLog("✅ Workflow complete! Generating final response...");
+        renderCallback?.renderLog(replanOut.response);
         state.response = replanOut.response;
         break;
       }
